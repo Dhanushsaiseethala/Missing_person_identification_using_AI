@@ -1,0 +1,37 @@
+pip install insightface opencv-python numpy
+!pip install onnxruntime
+import os
+import cv2
+import numpy as np
+from insightface.app import FaceAnalysis
+
+DATASET = "train_images"
+
+app = FaceAnalysis(name="buffalo_l")
+app.prepare(ctx_id=0, det_size=(640, 640))
+
+embeddings = []
+labels = []
+
+print("[INFO] Building embeddings from images only...")
+
+for person in os.listdir(DATASET):
+    person_dir = os.path.join(DATASET, person)
+    if not os.path.isdir(person_dir):
+        continue
+
+    for img_name in os.listdir(person_dir):
+        img_path = os.path.join(person_dir, img_name)
+        img = cv2.imread(img_path)
+
+        faces = app.get(img)
+        if len(faces) == 0:
+            continue
+
+        embeddings.append(faces[0].embedding)
+        labels.append(person)
+
+np.save("embeddings.npy", np.array(embeddings))
+np.save("labels.npy", np.array(labels))
+
+print("[DONE] Image-based training complete.")
