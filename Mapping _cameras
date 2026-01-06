@@ -1,0 +1,101 @@
+import folium
+from haversine import haversine, Unit
+
+# -------------------------------------------------
+# 1. Missing child past locations
+# -------------------------------------------------
+missing_child_locations = [
+    {"name": "School", "lat": 17.385044, "lon": 78.486671},
+    {"name": "Playground", "lat": 17.387140, "lon": 78.491684},
+    {"name": "Old Route", "lat": 17.389500, "lon": 78.493200}
+]
+
+# -------------------------------------------------
+# 2. CCTV camera database
+# -------------------------------------------------
+cctv_cameras = [
+    {"id": "CCTV_01", "lat": 17.386200, "lon": 78.488000},
+    {"id": "CCTV_02", "lat": 17.388500, "lon": 78.492500},
+    {"id": "CCTV_03", "lat": 17.392000, "lon": 78.495000}
+]
+
+# -------------------------------------------------
+# 3. Parameters
+# -------------------------------------------------
+SEARCH_RADIUS_METERS = 300
+MAP_CENTER = (17.3865, 78.4895)
+
+# -------------------------------------------------
+# 4. Distance-based CCTV matching
+# -------------------------------------------------
+def get_nearby_cctvs(child_loc):
+    results = []
+    child_coords = (child_loc["lat"], child_loc["lon"])
+
+    for cam in cctv_cameras:
+        cam_coords = (cam["lat"], cam["lon"])
+        distance = haversine(child_coords, cam_coords, unit=Unit.METERS)
+
+        if distance <= SEARCH_RADIUS_METERS:
+            results.append({
+                "camera_id": cam["id"],
+                "lat": cam["lat"],
+                "lon": cam["lon"],
+                "distance": round(distance, 2)
+            })
+
+    return results
+
+# -------------------------------------------------
+# 5. Generate final map + clear output
+# -------------------------------------------------
+def generate_final_map():
+    fmap = folium.Map(location=MAP_CENTER, zoom_start=16)
+
+    print("\n🔍 CCTV ANALYSIS REPORT\n")
+
+    for loc in missing_child_locations:
+        # Child marker
+        folium.Marker(
+            [loc["lat"], loc["lon"]],
+            popup=f"Missing Child Location: {loc['name']}",
+            icon=folium.Icon(color="red", icon="user")
+        ).add_to(fmap)
+
+        nearby_cctvs = get_nearby_cctvs(loc)
+
+        print(f"📍 {loc['name']} ({loc['lat']}, {loc['lon']})")
+
+        if not nearby_cctvs:
+            print("   ❌ No CCTV cameras found within range\n")
+            continue
+
+        for cam in nearby_cctvs:
+            print(f"   🎥 {cam['camera_id']} → {cam['distance']} meters")
+
+            # CCTV marker
+            folium.Marker(
+                [cam["lat"], cam["lon"]],
+                popup=f"{cam['camera_id']}<br>{cam['distance']} meters",
+                icon=folium.Icon(color="blue", icon="camera")
+            ).add_to(fmap)
+
+            # Line from child location to CCTV
+            folium.PolyLine(
+                locations=[
+                    [loc["lat"], loc["lon"]],
+                    [cam["lat"], cam["lon"]]
+                ],
+                color="green",
+                weight=2
+            ).add_to(fmap)
+
+        print()
+
+    fmap.save("final_missing_child_cctv_map.html")
+    print("✅ Final map generated: final_missing_child_cctv_map.html")
+
+# -------------------------------------------------
+# 6. Run
+# -------------------------------------------------
+generate_final_map()
