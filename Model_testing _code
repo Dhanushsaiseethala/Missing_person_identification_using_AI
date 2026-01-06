@@ -1,0 +1,59 @@
+import cv2
+import numpy as np
+from insightface.app import FaceAnalysis
+from sklearn.metrics.pairwise import cosine_similarity
+from collections import Counter
+
+# -------------------------------
+# Load trained data
+# -------------------------------
+embeddings_db = np.load("embeddings.npy")
+labels_db = np.load("labels.npy")
+
+# -------------------------------
+# Initialize InsightFace
+# -------------------------------
+app = FaceAnalysis(name="buffalo_l")
+app.prepare(ctx_id=0, det_size=(640, 640))
+
+# -------------------------------
+# Video input
+# -------------------------------
+video_path = "test_video.mp4"   # <-- change this
+cap = cv2.VideoCapture(video_path)
+
+predicted_names = []
+
+print("[INFO] Processing video...")
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    faces = app.get(frame)
+    if len(faces) == 0:
+        continue
+
+    for face in faces:
+        emb = face.embedding.reshape(1, -1)
+
+        # Compare with database embeddings
+        sims = cosine_similarity(emb, embeddings_db)[0]
+        best_match_idx = np.argmax(sims)
+        best_score = sims[best_match_idx]
+
+        # Threshold to reject unknown faces
+        if best_score > 0.5:
+            predicted_names.append(labels_db[best_match_idx])
+
+cap.release()
+
+# -------------------------------
+# Final decision
+# -------------------------------
+if len(predicted_names) == 0:
+    print("No known person detected in the video.")
+else:
+    final_person = Counter(predicted_names).most_common(1)[0][0]
+    print(f"Person detected in video: {final_person}")
